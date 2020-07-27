@@ -455,3 +455,181 @@ Car................destroy...............
 容器关闭.....................    
 ```
 
+## @PropertySource 加载外部配置文件
+
+
+
+## @Value 属性赋值
+
+这个是没有使用@Value
+
+```java
+package com.three.beans;
+
+public class Person {
+    private Integer id;
+    private String name;
+
+    public Person() {
+    }
+
+    public Person(Integer id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return "Person{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                '}';
+    }
+}
+
+@Configuration
+public class MainConfigPropertyValue {
+
+    @Bean
+    public Person person() {
+        return new Person();
+    }
+}
+
+
+public class HellTest {
+
+    @Test
+    public void hello() {
+        AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(MainConfigPropertyValue.class);
+        Person person = ctx.getBean(Person.class);
+        System.out.println(person);
+    }
+}
+//属性没有赋值前输出：Person{id=null, name='null'}
+```
+
+这个是使用@Value
+
+person.properties
+
+```properties
+person.nickName=小张三
+```
+
+```java
+public class Person {
+    //使用@Value属性赋值
+    //1、基本数值
+    //2、可以写SpEL: #{}
+    //3、可以写${}：获取配置文件中的值(在运行环境变量里面的值)
+    @Value("#{10-1}")
+    private Integer id;
+    @Value("张三")
+    private String name;
+    @Value("${person.nickName}")
+    private String nickName;
+ 
+    ....
+}
+
+
+//使用@PropertySource读取外部配置文件中k/v保存到运行的环境变量中
+@PropertySource(value = {"classpath:/person.properties"})
+@Configuration
+public class MainConfigPropertyValue {
+
+    @Bean
+    public Person person() {
+        return new Person();
+    }
+}
+
+ @Test
+    public void hello() {
+        AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(MainConfigPropertyValue.class);
+        Person person = ctx.getBean(Person.class);
+        System.out.println(person);
+
+        ConfigurableEnvironment env = ctx.getEnvironment();
+        String property = env.getProperty("person.nickName");
+        System.out.println(property);
+    }
+//输出如下：
+//Person{id=9, name='张三', nickName='小张三'}
+//小张三
+```
+
+## @Primary
+
+当有多个对应的属性是可以通过@Primary来指定优先加载
+
+```java
+
+@Repository
+public class PersonDao {
+    private String lable;
+
+    public PersonDao() {
+        lable = "d1";
+    }
+
+    public String getLable() {
+        return lable;
+    }
+
+    public void setLable(String lable) {
+        this.lable = lable;
+    }
+
+    @Override
+    public String toString() {
+        return "PersonDao{" +
+                "lable='" + lable + '\'' +
+                '}';
+    }
+}
+
+
+@Configuration
+@ComponentScan({"com.three.dao","com.three.service"})
+public class MainConfigPropertyValue {
+
+    @Primary
+    @Bean("personDao2")
+    public PersonDao personDao(){
+        PersonDao dao = new PersonDao();
+        dao.setLable("d2");
+        return new PersonDao();
+    }
+}
+
+
+@Service
+public class PersonService {
+    @Autowired
+    private PersonDao personDao;
+
+    public void print() {
+        System.out.println("person lable=" + personDao.getLable());
+    }
+}
+```
+
+上面容器中会有两个PersonDao类型，但有个上面指定@Primary，则在@Autowired自动装配是会优先装配标注@Primary的。如果想装配其他的可以@Autowired+@Qualifier("id名字")来指定装配的对象
