@@ -633,3 +633,134 @@ public class PersonService {
 ```
 
 上面容器中会有两个PersonDao类型，但有个上面指定@Primary，则在@Autowired自动装配是会优先装配标注@Primary的。如果想装配其他的可以@Autowired+@Qualifier("id名字")来指定装配的对象
+
+
+
+@Autowired可以标注在方法、构造器、参数、属性上，当标注在构造器（有参构造器）上时，如果只有这一个构造器可以省略@Autowired注解，参数位置的组件还是会从容器中加载
+
+
+
+@Bean+方法参数：参数从容器中获取 默认不写@Autowired
+
+## 自动装配
+
+1)、@Autowired + @Qualifier + @Primary
+
+2)、@Resource (JSR255规范)
+
+3)、@Inject (JSR330规范)
+
+4)、实现Aware接口注入spring底层组件
+
+5)、@Profile  根据环境注册Bean
+
+## profile
+
+spring为我们提供的可以根据当前环境，动态的激活和切换一系列组件的功能。
+
+@Profile:指定组件在那个环境的情况下才能被注册到容器中，不指定，在任何环境下都能注册这个组件
+
+加了环境标识的Bean，只有这个环境被激活的时候才能注册到容器中。默认是default环境
+
+当@Profile标注在配置类上时，只有是指定环境的时候，整个配置类里面的所有配置才能开始生效
+
+怎样切换环境呢？
+
+1、使用命令行动态参数  -Dspring.profiles.active=test/dev/prod
+
+2、使用代码的方式
+
+dbcofig.properties
+
+```properties
+db.user=root
+db.password=root
+db.driverClass=com.jdbc.mysql.Driver
+```
+
+```java
+
+@PropertySource({"classpath:/dbconf.properties"})
+@Configuration
+public class MainConfigOfProfile implements EmbeddedValueResolverAware {
+
+    @Value("${db.user}")
+    private String user;
+
+    private StringValueResolver resolver;
+    private String driverClass;
+
+    @Bean
+    public Person person(){
+        return new Person();
+    }
+
+    @Profile("test")
+    @Bean("testDataSource")
+    public DataSource dataSourceTest(@Value("${db.password}") String pwd) throws PropertyVetoException {
+        ComboPooledDataSource dataSource = new ComboPooledDataSource();
+        dataSource.setUser(user);
+        dataSource.setPassword(pwd);
+        dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/test");
+        dataSource.setDriverClass(driverClass);
+        return dataSource;
+    }
+
+    @Profile("dev")
+    @Bean("devDataSource")
+    public DataSource dataSourceDev(@Value("${db.password}") String pwd) throws PropertyVetoException {
+        ComboPooledDataSource dataSource = new ComboPooledDataSource();
+        dataSource.setUser(user);
+        dataSource.setPassword(pwd);
+        dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/dev");
+        dataSource.setDriverClass(driverClass);
+        return dataSource;
+    }
+
+    @Profile("prod")
+    @Bean("prodDataSource")
+    public DataSource dataSourceProd(@Value("${db.password}") String pwd) throws PropertyVetoException {
+        ComboPooledDataSource dataSource = new ComboPooledDataSource();
+        dataSource.setUser(user);
+        dataSource.setPassword(pwd);
+        dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/prod");
+        dataSource.setDriverClass(driverClass);
+        return dataSource;
+    }
+
+    @Override
+    public void setEmbeddedValueResolver(StringValueResolver resolver) {
+        this.resolver = resolver;
+        this.driverClass = this.resolver.resolveStringValue("${db.driverClass}");
+    }
+}
+```
+
+```java
+
+public class HellTest {
+
+    @Test
+    public void hello() {
+        //1、创建一个ApplicationContext,思考：为什么要无参呢？
+        AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
+        //2、设置需要激活的环境,可以设置多个环境同时生效
+        ctx.getEnvironment().setActiveProfiles("test", "dev");
+        //3、注册配置类
+        ctx.register(MainConfigOfProfile.class);
+        //4、启动刷新容器
+        ctx.refresh();
+
+        String[] names = ctx.getBeanNamesForType(DataSource.class);
+        Stream.of(names).forEach(System.out::println);
+
+        Person person = ctx.getBean(Person.class);
+        System.out.println(person);
+    }
+}
+//输出如下：
+//testDataSource
+//devDataSource
+//Person{id=9, name='张三'}
+```
+
